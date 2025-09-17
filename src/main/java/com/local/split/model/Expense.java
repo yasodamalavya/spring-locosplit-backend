@@ -1,5 +1,6 @@
 package com.local.split.model;
-import com.fasterxml.jackson.annotation.JsonManagedReference; // Import this
+
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -28,9 +29,9 @@ public class Expense {
     @JoinColumn(name = "group_id")
     private Group group;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "paid_by_friend_id")
-    private Friend paidBy;
+    @OneToMany(mappedBy = "expense", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
+    private List<ExpensePayment> payments; // <-- Replaced paidBy with this
 
     @OneToMany(mappedBy = "expense", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
