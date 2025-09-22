@@ -1,7 +1,6 @@
 package com.local.split.dto;
 
 import com.local.split.model.ExpensePayment;
-import com.local.split.model.Friend;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -12,5 +11,5 @@ public class AddExpenseRequest {
     private String description;
     private Long groupId;
     private List<ExpensePayment> payments;
-    private List<Long> memberIds;
+    private List<Long> allMemberIds; // <-- A new field to hold all member IDs
 }

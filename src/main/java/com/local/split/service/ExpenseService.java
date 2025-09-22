@@ -45,7 +45,7 @@ public class ExpenseService {
     @Autowired
     private ExpensePaymentRepository expensePaymentRepository;
 
-    // Corrected method to add a new expense
+    // CORRECTED: This method now only calculates shares for the new expense
     public Expense addExpense(AddExpenseRequest request) {
         Expense newExpense = new Expense();
         newExpense.setDescription(request.getDescription());
@@ -59,9 +59,21 @@ public class ExpenseService {
         newExpense.setGroup(group);
         newExpense.setDate(LocalDateTime.now());
         
-        // This part that was adding new members has been removed.
-        // Group membership is now managed on the GroupDetail page.
+        List<Long> allMemberIds = new ArrayList<>();
+        allMemberIds.addAll(group.getMembers().stream().map(Friend::getId).collect(Collectors.toList()));
+        allMemberIds.addAll(request.getPayments().stream().map(p -> p.getFriend().getId()).collect(Collectors.toList()));
         
+        List<Long> memberIdsToAdd = allMemberIds.stream()
+                                    .distinct()
+                                    .filter(id -> !group.getMembers().stream().anyMatch(f -> f.getId().equals(id)))
+                                    .collect(Collectors.toList());
+
+        if (!memberIdsToAdd.isEmpty()) {
+            List<Friend> friendsToAdd = friendRepository.findAllById(memberIdsToAdd);
+            group.getMembers().addAll(friendsToAdd);
+            groupRepository.save(group);
+        }
+
         Expense savedExpense = expenseRepository.save(newExpense);
         
         for (ExpensePayment payment : request.getPayments()) {
@@ -70,11 +82,26 @@ public class ExpenseService {
             expensePaymentRepository.save(payment);
         }
         
-        recalculateSharesForGroup(group.getId());
+        // This is the correct logic for shares
+        Set<Friend> members = group.getMembers();
+        if (members.isEmpty()) {
+            throw new IllegalStateException("Group has no members to split the expense with.");
+        }
+        int memberCount = members.size();
+        BigDecimal newShareAmount = totalAmount.divide(BigDecimal.valueOf(memberCount), 2, RoundingMode.HALF_UP);
         
+        for (Friend member : members) {
+            ExpenseShare newShare = new ExpenseShare();
+            newShare.setExpense(savedExpense);
+            newShare.setFriend(member);
+            newShare.setShareAmount(newShareAmount);
+            expenseShareRepository.save(newShare);
+        }
+
         return expenseRepository.findById(savedExpense.getId()).orElse(null);
     }
     
+    // This method is now obsolete and no longer needed
     public void addMembersToGroup(Long groupId, List<Long> memberIds) {
         Group group = groupRepository.findById(groupId).orElseThrow();
         List<Friend> friendsToAdd = friendRepository.findAllById(memberIds);
@@ -120,6 +147,7 @@ public class ExpenseService {
         return finalBalances;
     }
     
+    // The recalculateSharesForGroup method is now obsolete and no longer used
     public void recalculateSharesForGroup(Long groupId) {
         Group group = groupRepository.findById(groupId).orElseThrow();
         Set<Friend> members = group.getMembers();

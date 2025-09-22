@@ -4,9 +4,8 @@ import com.local.split.model.Friend;
 import com.local.split.model.Group;
 import com.local.split.repository.FriendRepository;
 import com.local.split.repository.GroupRepository;
-import com.local.split.service.ExpenseService; // <-- Import the ExpenseService
+import com.local.split.service.ExpenseService;
 import com.local.split.service.GroupService;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
 
 @RestController
 @RequestMapping("/api/groups")
@@ -30,7 +30,10 @@ public class GroupController {
     private FriendRepository friendRepository;
     
     @Autowired
-    private ExpenseService expenseService; // <-- Autowire the ExpenseService
+    private ExpenseService expenseService;
+    
+    @Autowired
+    private GroupService groupService;
 
     @GetMapping
     public List<Group> getAllGroups() {
@@ -46,15 +49,14 @@ public class GroupController {
 
     @PostMapping
     public Group createGroup(@RequestBody Group newGroup) {
-        // Find the friends in the DB
         Set<Friend> members = newGroup.getMembers().stream()
-                                    .map(friend -> friendRepository.findById(friend.getId()).orElse(null))
+                                    .map(friend -> friendRepository.findById(friend.getId()).orElseThrow())
                                     .collect(Collectors.toSet());
         newGroup.setMembers(members);
         return groupRepository.save(newGroup);
     }
     
-    // NEW METHOD: Add a new friend to an existing group and recalculate shares
+    // CORRECTED: This method now only adds a new member and does not trigger recalculation
     @PostMapping("/{groupId}/add-friend/{friendId}")
     public ResponseEntity<Group> addMemberToGroup(@PathVariable Long groupId, @PathVariable Long friendId) {
         Group group = groupRepository.findById(groupId).orElse(null);
@@ -63,19 +65,16 @@ public class GroupController {
         if (group == null || friend == null) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
-
-        group.getMembers().add(friend);
-        Group updatedGroup = groupRepository.save(group);
         
-        // After adding the new member, trigger the dynamic share recalculation
-        expenseService.recalculateSharesForGroup(groupId);
+        List<Long> memberIds = new ArrayList<>();
+        memberIds.add(friendId);
+        expenseService.addMembersToGroup(groupId, memberIds);
+        
+        Group updatedGroup = groupRepository.findById(groupId).orElse(null);
 
         return new ResponseEntity<>(updatedGroup, HttpStatus.OK);
     }
     
-    @Autowired
-    private GroupService groupService; // <-- Autowire the new service
-
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteGroup(@PathVariable Long id) {
         if (groupRepository.existsById(id)) {
@@ -84,9 +83,4 @@ public class GroupController {
         }
         return new ResponseEntity<>(HttpStatus.NOT_FOUND);
     }
-    
-    
-    
-    
-
 }
